@@ -1,5 +1,6 @@
 from youtube_transcript_api import YouTubeTranscriptApi
 from urllib.parse import urlparse, parse_qs
+import requests
 
 def extract_video_id(youtube_url: str) -> str:
     parsed = urlparse(youtube_url)
@@ -15,6 +16,26 @@ def extract_video_id(youtube_url: str) -> str:
 def get_transcript(video_id: str):
     api = YouTubeTranscriptApi()
     return api.fetch(video_id, languages=["en-US", "en"])
+
+def get_video_metadata(video_id: str):
+    """Get video title and channel name from YouTube."""
+    try:
+        # Use YouTube oEmbed API (no API key required)
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        response = requests.get(oembed_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "title": data.get("title", ""),
+                "channel_name": data.get("author_name", "")
+            }
+    except Exception as e:
+        print(f"Error fetching video metadata: {e}")
+    
+    return {
+        "title": "",
+        "channel_name": ""
+    }
 
 def generate_candidate_clips(snippets, target_duration=40, max_candidates=3):
     """Generate candidate clips from transcript snippets."""

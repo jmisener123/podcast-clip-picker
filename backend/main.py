@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from transcript import extract_video_id, get_transcript, generate_candidate_clips
+from transcript import extract_video_id, get_transcript, generate_candidate_clips, get_video_metadata
 from llm import pick_best_clip
+from dotenv import load_dotenv
+load_dotenv()
 
 
 app = FastAPI()
@@ -24,11 +26,16 @@ class ClipResponse(BaseModel):
     start_seconds: int
     end_seconds: int
     reason: str
+    title: str
+    channel_name: str
 
 @app.post("/pick-clip", response_model=ClipResponse)
 def pick_clip(payload: ClipRequest):
     video_id = extract_video_id(payload.youtube_url)
     transcript = get_transcript(video_id)
+    
+    # Get video metadata
+    metadata = get_video_metadata(video_id)
     
     # Normalize snippets: convert duration to end time
     snippets = []
@@ -50,5 +57,7 @@ def pick_clip(payload: ClipRequest):
     
     best_clip = candidates[choice["index"]]
     best_clip["reason"] = choice["reason"]
+    best_clip["title"] = metadata["title"]
+    best_clip["channel_name"] = metadata["channel_name"]
     
     return best_clip
