@@ -6,6 +6,21 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  function extractVideoId(youtubeUrl) {
+    try {
+      const url = new URL(youtubeUrl);
+      if (url.hostname.includes("youtube.com")) {
+        return url.searchParams.get("v");
+      }
+      if (url.hostname.includes("youtu.be")) {
+        return url.pathname.slice(1);
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
+
   async function handleSubmit() {
     setLoading(true);
     setError(null);
@@ -60,9 +75,27 @@ function App() {
       {error && <p style={{ color: "red", textAlign: "center", width: "100%" }}>{error}</p>}
 
       {result && (
-        <pre style={{ marginTop: 20, textAlign: "left", width: "100%" }}>
-          {JSON.stringify(result, null, 2)}
-        </pre>
+        <div style={{ marginTop: 20, width: "100%" }}>
+          <div style={{ marginBottom: 16, textAlign: "center" }}>
+            <p style={{ marginBottom: 8 }}><strong>Reason:</strong> {result.reason}</p>
+            <p style={{ fontSize: "0.9em", color: "#888" }}>
+              Clip: {Math.floor(result.start_seconds / 60)}:{(result.start_seconds % 60).toString().padStart(2, "0")} - {Math.floor(result.end_seconds / 60)}:{(result.end_seconds % 60).toString().padStart(2, "0")}
+            </p>
+          </div>
+          
+          {extractVideoId(url) && (
+            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", width: "100%" }}>
+              <iframe
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                src={`https://www.youtube.com/embed/${extractVideoId(url)}?start=${result.start_seconds}`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
