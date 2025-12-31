@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from transcript import extract_video_id, get_transcript, generate_candidate_clips, get_video_metadata
+from transcript import extract_video_id, get_transcript, generate_candidate_clips, get_video_metadata, extract_names_from_text
 from llm import pick_best_clip
 from dotenv import load_dotenv
 load_dotenv()
@@ -49,8 +49,9 @@ def pick_clip(payload: ClipRequest):
     # Generate candidate clips
     candidates = generate_candidate_clips(snippets)
     
-    # Limit to top 3 candidates
-    candidates = candidates[:3]
+    # Extract names from each candidate clip
+    for candidate in candidates:
+        candidate["names"] = extract_names_from_text(candidate["text"])
     
     # Use LLM to pick the best clip
     choice = pick_best_clip(candidates)

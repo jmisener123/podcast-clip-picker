@@ -24,27 +24,45 @@ function App() {
   function formatReason(reason) {
     if (!reason) return null;
     
+    // Helper function to convert markdown bold (**text**) to JSX
+    // Also handles malformed markdown like **text* or *text**
+    function parseBold(text) {
+      const parts = [];
+      // Match both proper **text** and malformed **text* or *text**
+      const regex = /\*{1,2}(.+?)\*{1,2}/g;
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = regex.exec(text)) !== null) {
+        // Add text before the bold part
+        if (match.index > lastIndex) {
+          parts.push(text.substring(lastIndex, match.index));
+        }
+        // Add the bold part
+        parts.push(<strong key={match.index}>{match[1]}</strong>);
+        lastIndex = regex.lastIndex;
+      }
+      
+      // Add remaining text, removing any stray asterisks
+      if (lastIndex < text.length) {
+        const remaining = text.substring(lastIndex).replace(/\*+/g, '');
+        if (remaining) {
+          parts.push(remaining);
+        }
+      }
+      
+      return parts.length > 0 ? parts : text;
+    }
+    
     // Try splitting by newlines first
     let lines = reason.split(/[\n\r]+/).map(line => line.trim()).filter(line => line);
-    
-    // If no newlines, try splitting by bullet patterns with spaces (e.g., " * " or " - ")
-    if (lines.length === 1) {
-      const text = lines[0];
-      // Split by patterns like " * ", " - ", or " • " (with spaces around)
-      const bulletSplitPattern = /\s*[\*\-\•]\s+/;
-      if (bulletSplitPattern.test(text)) {
-        lines = text.split(bulletSplitPattern).filter(line => line.trim());
-        // Add bullet markers back for processing
-        lines = lines.map(line => `* ${line.trim()}`);
-      }
-    }
     
     // Check if it looks like bullet points (starts with *, -, or •)
     const bulletPattern = /^[\*\-\•]\s*/;
     const hasBullets = lines.some(line => bulletPattern.test(line));
     
     if (hasBullets) {
-      // Extract bullet points
+      // Has explicit bullets - extract and render them
       const bullets = lines
         .filter(line => bulletPattern.test(line))
         .map(line => line.replace(bulletPattern, '').trim())
@@ -54,15 +72,15 @@ function App() {
         return (
           <ul style={{ textAlign: "left", margin: "8px 0", paddingLeft: "20px", listStyleType: "disc" }}>
             {bullets.map((bullet, index) => (
-              <li key={index} style={{ marginBottom: "8px", lineHeight: "1.5" }}>{bullet}</li>
+              <li key={index} style={{ marginBottom: "8px", lineHeight: "1.5" }}>{parseBold(bullet)}</li>
             ))}
           </ul>
         );
       }
     }
     
-    // If no bullets detected, return as-is
-    return <div style={{ marginTop: "8px", lineHeight: "1.5" }}>{reason}</div>;
+    // If no bullets detected, return as-is with bold parsing (join lines with space)
+    return <div style={{ marginTop: "8px", lineHeight: "1.5" }}>{parseBold(lines.join(' '))}</div>;
   }
 
   async function handleSubmit() {
@@ -109,7 +127,7 @@ function App() {
         placeholder="Paste YouTube link"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        style={{ width: "100%", padding: 8, marginTop: 20, textAlign: "center" }}
+        style={{ width: "100%", padding: 8, marginTop: 20, textAlign: "center", opacity: 0.6 }}
       />
 
       <button onClick={handleSubmit} disabled={loading} style={{ marginTop: 12, width: "100%" }}>
@@ -150,7 +168,7 @@ function App() {
               <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", width: "100%" }}>
               <iframe
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-                src={`https://www.youtube.com/embed/${extractVideoId(url)}?start=${result.start_seconds}`}
+                src={`https://www.youtube.com/embed/${extractVideoId(url)}?start=${result.start_seconds}&end=${result.end_seconds}`}
                 title="YouTube video player"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
