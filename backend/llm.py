@@ -138,9 +138,51 @@ def parse_json_response(content):
             print(f"Final attempted content: {content_fixed if 'content_fixed' in locals() else content}")
             raise ValueError(f"Failed to parse LLM response as JSON: {e2}. Content: {content[:200]}")
 
-def pick_best_clip(clips):
+CRITERIA_DEFINITIONS = {
+    "actionable": {
+        "label": "Actionable advice or tactics",
+        "description": "Specific steps, methods, or practices someone can immediately apply"
+    },
+    "surprising": {
+        "label": "Surprising insight or counterintuitive idea",
+        "description": "Challenges conventional wisdom or reveals something unexpected"
+    },
+    "story": {
+        "label": "Concrete story or example",
+        "description": "Real anecdote with specific details (names, numbers, situations)"
+    },
+    "controversial": {
+        "label": "Controversial or bold statement",
+        "description": "Strong opinion that sparks thought or debate"
+    },
+    "funny": {
+        "label": "Funny or entertaining moment",
+        "description": "Humor, wit, jokes, or entertaining exchanges"
+    },
+    "emotional": {
+        "label": "Emotional or inspiring moment",
+        "description": "Heartfelt, motivational, or moving content"
+    },
+}
+
+DEFAULT_CRITERIA = ["actionable", "surprising", "story", "controversial"]
+
+
+def pick_best_clip(clips, criteria=None):
     client = get_client()
-    
+
+    # Use provided criteria or defaults
+    active_criteria = criteria if criteria else DEFAULT_CRITERIA
+
+    # Build criteria section of the prompt
+    criteria_lines = []
+    for crit_id in active_criteria:
+        if crit_id in CRITERIA_DEFINITIONS:
+            defn = CRITERIA_DEFINITIONS[crit_id]
+            criteria_lines.append(f"- **{defn['label']}** - {defn['description']}")
+
+    criteria_text = "\n".join(criteria_lines) if criteria_lines else ""
+
     # Format clips with clear labeling
     formatted_clips = []
     for i, clip in enumerate(clips):
@@ -162,11 +204,7 @@ Each clip below is a candidate excerpt from a longer podcast episode, labeled wi
 Your goal is to pick the ONE clip that would be most compelling to a new listener who has never heard this podcast.
 
 A strong clip should have at least ONE of these qualities:
-- **Actionable advice or tactics** - Specific steps, methods, or practices someone can immediately apply
-- **Surprising insight or counterintuitive idea** - Challenges conventional wisdom or reveals something unexpected
-- **Concrete story or example** - Real anecdote with specific details (names, numbers, situations)
-- **Controversial or bold statement** - Strong opinion that sparks thought or debate
-- **Practical framework or mental model** - A clear way to think about a problem
+{criteria_text}
 
 AVOID clips that are:
 - Vague platitudes or generic advice ("be yourself", "work hard", "stay positive")
@@ -176,7 +214,7 @@ AVOID clips that are:
 - Meandering conversations without a clear point
 
 Prioritization (most to least important):
-1. Actionable and specific (HOW to do something, not just WHAT to do)
+1. Matches the criteria above
 2. Contains concrete examples, numbers, names, or stories
 3. Memorable and quotable
 4. Self-contained and immediately understandable
@@ -186,48 +224,31 @@ Pick the single best clip based on these criteria.
 IMPORTANT: Your "reason" field MUST describe the content of the clip you selected. Read the clip text carefully before writing the reason.
 
 For the "reason" field:
-- Use 3-4 concise bullets that summarize the ACTUAL conversation in the SELECTED clip.
-- CRITICAL: If a clip has a "speakers_mentioned" field, you MUST use those exact names when referring to the speakers. Never write "the speaker" or "they" - always use the actual person's name from the speakers_mentioned field.
-- If no names are in speakers_mentioned, you may use "the speaker" as a fallback.
-- Include specific details like roles/titles, concrete examples, numbers, or key quotes from the transcript.
-- **Bold important words or phrases** using markdown syntax (e.g., **John Smith**, **CEO**, **$1 million**).
-- Format bullets using "* " at the start of each line, separated by spaces (NOT as a JSON array)
-- Don't use any intro sentence like "I chose this because" or "This clip is great because".
-- Focus on the content of the clip, not your decision process.
-- Do NOT use generic descriptions - be specific about what is actually said in the clip.
-- Do NOT describe clips you didn't select
-- Do NOT say "I chose this because"
-- Write in a casual, informal tone as if summarizing to a friend.
+- Start with WHO is speaking and WHY they have credibility (e.g., "**Sarah Chen**, a **former Google PM** who scaled a team from 5 to 50...")
+- Then explain WHAT they're saying and WHY it matters or is surprising
+- Use 3-4 concise bullets
+- CRITICAL: If a clip has a "speakers_mentioned" field, use those names. Add context about who they are if mentioned in the clip.
+- Include specific details: roles/titles, numbers, concrete examples, or key quotes
+- **Bold important words or phrases** using markdown syntax
+- Format as a bullet list with "- " at the start of each line, ending each bullet with a period
+- Focus on making someone want to watch this clip - sell it!
+- Write in a casual, engaging tone
 
 Return ONLY valid JSON in this format:
 {{
   "index": number,
-  "reason": "* First bullet point * Second bullet point * Third bullet point"
+  "reason": "- First bullet\\n- Second bullet\\n- Third bullet"
 }}
 
 Example correct response:
 {{
   "index": 2,
-  "reason": "* **Sarah** discusses her framework for productivity * She mentions the **80/20 rule** * Gives a specific example of how she eliminated **5 hours** of meetings per week"
-}}
-
-CRITICAL FORMATTING RULES:
-- The "reason" value MUST be enclosed in double quotes: "reason": "your text here"
-- The "reason" MUST be a single-line STRING with NO newlines or line breaks
-- Separate bullet points with spaces ONLY (use " * " between bullets)
-- Do NOT use \n or actual line breaks in the reason string
-- Keep the entire JSON on as few lines as possible
-
-Return ONLY valid JSON in this format:
-{{
-  "index": number,
-  "reason": string
+  "reason": "- **Sarah Chen**, a **former Google PM**, shares her productivity framework.\\n- She explains the **80/20 rule** and how most meetings are wasteful.\\n- Gives a specific example: she eliminated **5 hours** of meetings per week and doubled her output."
 }}
 
 Important:
-- The index must match the clip you're describing in the reason
-- Do not include newlines, tabs, or control characters inside string values
-- All strings must be valid JSON strings
+- Use \\n for newlines in the JSON string (escaped newlines)
+- The index must match the clip you're describing
 - Do not include text before or after the JSON object
 
 Clips:
@@ -237,7 +258,7 @@ Clips:
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
+        temperature=0,
     )
 
     content = response.choices[0].message.content

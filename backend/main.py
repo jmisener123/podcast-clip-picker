@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,8 @@ app.add_middleware(
 
 class ClipRequest(BaseModel):
     youtube_url: str
+    criteria: Optional[list[str]] = None
+    topic: Optional[str] = None
 
 class ClipResponse(BaseModel):
     start_seconds: int
@@ -29,14 +32,22 @@ class ClipResponse(BaseModel):
     title: str
     channel_name: str
 
+def filter_clips_by_topic(candidates: list, topic: str) -> list:
+    """Filter clips to only those mentioning the topic (case-insensitive)."""
+    topic_lower = topic.lower()
+    filtered = [c for c in candidates if topic_lower in c["text"].lower()]
+    # If no matches, return all candidates
+    return filtered if filtered else candidates
+
+
 @app.post("/pick-clip", response_model=ClipResponse)
 def pick_clip(payload: ClipRequest):
     video_id = extract_video_id(payload.youtube_url)
     transcript = get_transcript(video_id)
-    
+
     # Get video metadata
     metadata = get_video_metadata(video_id)
-    
+
     # Normalize snippets: convert duration to end time
     snippets = []
     for item in transcript:
@@ -45,20 +56,24 @@ def pick_clip(payload: ClipRequest):
             "start": item.start,
             "end": item.start + item.duration
         })
-    
+
     # Generate candidate clips
     candidates = generate_candidate_clips(snippets)
-    
+
+    # Filter by topic if provided
+    if payload.topic:
+        candidates = filter_clips_by_topic(candidates, payload.topic)
+
     # Extract names from each candidate clip
     for candidate in candidates:
         candidate["names"] = extract_names_from_text(candidate["text"])
-    
+
     # Use LLM to pick the best clip
-    choice = pick_best_clip(candidates)
-    
+    choice = pick_best_clip(candidates, criteria=payload.criteria)
+
     best_clip = candidates[choice["index"]]
     best_clip["reason"] = choice["reason"]
     best_clip["title"] = metadata["title"]
     best_clip["channel_name"] = metadata["channel_name"]
-    
+
     return best_clip
