@@ -1,57 +1,89 @@
-# 🎧 Podcast Clip Picker
+# Podcast Clip Picker
 
-A full-stack web app that analyzes a podcast episode and selects the **single most compelling short clip** for sharing.
+A web app that finds the most shareable clip from any YouTube podcast episode.
 
-The app:
-- pulls a YouTube transcript
-- evaluates candidate clip excerpts
-- uses an LLM to choose the best clip
-- returns a timestamped result that can be embedded or shared
+Paste a link, optionally filter by topic or clip type, and get a timestamped result with an embedded preview.
 
-Built as a learning project to explore **FastAPI, React, LLMs, and modern full-stack workflows**.
+## Features
 
----
+- **Automatic clip selection** - Analyzes the full transcript and picks the best moment
+- **Topic search** - Find clips about a specific subject (e.g., "AI", "hiring", "productivity")
+- **Clip type filter** - Choose what you're looking for:
+  - Actionable advice
+  - Surprising insights
+  - Concrete stories
+  - Controversial takes
+  - Funny moments
+  - Emotional/inspiring content
+- **Embedded preview** - Watch the selected clip directly in the app
+- **Context-aware explanations** - See who's speaking and why the clip matters
 
-## ✨ What It Does
+## How It Works
 
-1. User submits a YouTube link to a podcast episode
-2. Backend fetches the transcript
-3. Transcript is split into candidate clips
-4. An LLM selects the *one* clip most likely to hook a new listener
-5. The app returns:
-   - the chosen clip index
-   - a short explanation of why it works
-   - the timestamp for embedding the video
+1. Fetches the YouTube transcript
+2. Generates candidate clips throughout the episode (skipping intros)
+3. Filters by topic if specified
+4. Uses an LLM to evaluate and select the best clip based on your criteria
+5. Returns the timestamp with an explanation
 
----
+## Tech Stack
 
-## 🧠 Why This Exists
+**Backend**: Python, FastAPI, Groq (Llama 3.3), youtube-transcript-api
 
-Finding good podcast clips is usually manual and time-consuming.
+**Frontend**: React, Vite
 
-This project explores whether an LLM can:
-- recognize self-contained moments
-- identify hooks and insights
-- avoid intros, ads, and filler
-- make editorial-style judgments
+## Setup
 
----
+### Backend
 
-## 🛠️ Tech Stack
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn youtube-transcript-api groq python-dotenv requests
+```
 
-**Backend**
-- Python
-- FastAPI
-- youtube-transcript-api
-- YouTube oEmbed API for title and channel name
-- Groq LLM API (Llama)
-- python-dotenv
+Create `backend/.env`:
+```
+GROQ_API_KEY=your_api_key_here
+```
 
-**Frontend**
-- React (Vite)
-- Fetch API
+Run:
+```bash
+uvicorn main:app --reload
+```
 
-**Other**
-- Git + GitHub
-- Environment-based config (`.env`)
-- JSON-based LLM contracts
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173
+
+## API
+
+**POST /pick-clip**
+
+```json
+{
+  "youtube_url": "https://www.youtube.com/watch?v=...",
+  "criteria": ["funny"],
+  "topic": "AI"
+}
+```
+
+Response:
+```json
+{
+  "start_seconds": 342,
+  "end_seconds": 401,
+  "reason": "- **Sam Altman** explains why...",
+  "title": "Episode Title",
+  "channel_name": "Channel Name"
+}
+```
+
+Both `criteria` and `topic` are optional.
